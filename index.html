@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APTET Practice Examination Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <h1 id="headerTitle">APTET PRACTICE EXAMINATION PORTAL</h1>
+    <div class="exam-meta" id="examMeta" style="display:none;">
+      <span id="activeMockName">Mock 1</span>
+      <span class="timer-box" id="timerDisplay">02:30:00</span>
+    </div>
+  </header>
+
+  <div class="progress-bar-container" id="progressBar" style="display:none;">
+    <div class="progress-bar-fill" id="progressFill"></div>
+  </div>
+
+  <main id="appContainer"></main>
+
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-box">
+      <h3 style="color: var(--primary); margin-bottom: 8px;">Submit Examination?</h3>
+      <p id="modalPrompt" style="color: var(--text-muted); margin-bottom: 20px;">Are you sure you want to finish?</p>
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button class="btn-prev" onclick="closeModal()">Cancel</button>
+        <button class="btn-submit" onclick="finalizeSubmission()">Confirm Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load question pools -->
+  <script src="questions/englishSubject.js"></script>
+  <script src="questions/cdp.js"></script>
+  <script src="questions/teluguLanguage1.js"></script>
+  <script src="questions/englishLanguage2.js"></script>
+
+  <!-- Load main exam logic -->
+  <script src="script.js"></script>
+</body>
+</html>
