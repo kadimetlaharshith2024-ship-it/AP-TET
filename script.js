@@ -1,31 +1,29 @@
 // Consolidate question pools
 const MASTER_QUESTION_POOL = [
-  ...(typeof ENGLISH_SUBJECT_POOL !== 'undefined' ? ENGLISH_SUBJECT_POOL : []),
-  ...(typeof CDP_POOL !== 'undefined' ? CDP_POOL : []),
   ...(typeof TELUGU_POOL !== 'undefined' ? TELUGU_POOL : []),
-  ...(typeof ENGLISH_L2_POOL !== 'undefined' ? ENGLISH_L2_POOL : [])
+  ...(typeof CDP_POOL !== 'undefined' ? CDP_POOL : []),
+  ...(typeof ENGLISH_L2_POOL !== 'undefined' ? ENGLISH_L2_POOL : []),
+  ...(typeof ENGLISH_SUBJECT_POOL !== 'undefined' ? ENGLISH_SUBJECT_POOL : [])
 ];
 
 console.log("Total Questions Loaded into Master Pool:", MASTER_QUESTION_POOL.length);
 
-// Subject configurations: question count and duration in minutes
-const SUBJECT_CONFIG = {
-  all: { title: "Full Mock Test (All Subjects)", count: 150, timeMinutes: 150 },
-  englishSubject: { title: "English Content", count: 60, timeMinutes: 60 },
-  cdp: { title: "Child Development & Pedagogy (CDP)", count: 30, timeMinutes: 30 },
-  teluguLanguage1: { title: "Telugu Language-I", count: 30, timeMinutes: 30 },
-  englishLanguage2: { title: "English Language-II", count: 30, timeMinutes: 30 }
-};
+// Official Paper Pattern (Sequential Order: Telugu -> CDP -> English-II -> English Content)
+const SECTION_ORDER = [
+  { key: "teluguLanguage1", title: "Telugu Language-I", count: 30, startNum: 1, endNum: 30 },
+  { key: "cdp", title: "Child Development & Pedagogy (CDP)", count: 30, startNum: 31, endNum: 60 },
+  { key: "englishLanguage2", title: "English Language-II", count: 30, startNum: 61, endNum: 90 },
+  { key: "englishSubject", title: "English Content", count: 60, startNum: 91, endNum: 150 }
+];
 
 const TARGET_SUBTOPIC_QUOTAS = {
-  englishSubject: { "Vocabulary": 12, "Grammar": 18, "Reading": 6, "Literature": 12, "ELT": 12 },
-  englishLanguage2: { "Vocabulary": 8, "Grammar": 12, "Language Functions": 5, "Reading": 5 },
   teluguLanguage1: { "Literature": 7, "Comprehension": 6, "Grammar": 8, "Vocabulary": 5, "Language Usage": 4 },
-  cdp: { "Growth & Development": 4, "Developmental Theories": 5, "Childhood & Adolescence": 3, "Intelligence & Aptitude": 4, "Learning Theories": 5, "Personality & Assessment": 3, "Guidance & Mental Health": 3, "Education Policies": 3 }
+  cdp: { "Growth & Development": 4, "Developmental Theories": 5, "Childhood & Adolescence": 3, "Intelligence & Aptitude": 4, "Learning Theories": 5, "Personality & Assessment": 3, "Guidance & Mental Health": 3, "Education Policies": 3 },
+  englishLanguage2: { "Vocabulary": 8, "Grammar": 12, "Language Functions": 5, "Reading": 5 },
+  englishSubject: { "Vocabulary": 12, "Grammar": 18, "Reading": 6, "Literature": 12, "ELT": 12 }
 };
 
 let activeExam = {
-  mode: "all",           // "all" or specific subject key
   mockNumber: 1,
   questions: [],
   userAnswers: {},
@@ -34,67 +32,71 @@ let activeExam = {
   currentIndex: 0
 };
 
-function generateMockQuestions(mode, mockNumber) {
-  const chosen = [];
-  const sectionsToInclude = mode === "all" 
-    ? ["englishSubject", "cdp", "teluguLanguage1", "englishLanguage2"] 
-    : [mode];
+// Helper: In-place array shuffle
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
-  sectionsToInclude.forEach(sec => {
-    const quotaMap = TARGET_SUBTOPIC_QUOTAS[sec] || {};
-    const totalRequired = SUBJECT_CONFIG[sec].count;
-    let pool = MASTER_QUESTION_POOL.filter(q => q.section === sec);
+function generateMockQuestions(mockNumber) {
+  const finalOrderedExam = [];
 
-    // Rule: Mocks 1 to 3 guarantee zero repetition for English Subject
-    if (sec === "englishSubject" && mockNumber <= 3) {
-      const start = (mockNumber - 1) * 60;
-      const subSelection = pool.slice(start, start + 60);
-      subSelection.forEach(q => {
-        q.usedCount = (q.usedCount || 0) + 1;
-        chosen.push(q);
-      });
-      return;
-    }
-
-    // Partition pool into topic buckets
-    const buckets = {};
-    pool.forEach(q => {
-      const top = q.topic || "General";
-      if (!buckets[top]) buckets[top] = [];
-      buckets[top].push(q);
-    });
+  // Iterate strictly in defined section sequence
+  SECTION_ORDER.forEach(secConfig => {
+    const secKey = secConfig.key;
+    const quotaMap = TARGET_SUBTOPIC_QUOTAS[secKey] || {};
+    const totalRequired = secConfig.count;
+    let pool = MASTER_QUESTION_POOL.filter(q => q.section === secKey);
 
     let secPicked = [];
-    for (const [topicName, needed] of Object.entries(quotaMap)) {
-      let bucket = buckets[topicName] || [];
-      bucket.sort((a, b) => (a.usedCount || 0) - (b.usedCount || 0) || Math.random() - 0.5);
-      const items = bucket.slice(0, needed);
-      items.forEach(q => {
-        q.usedCount = (q.usedCount || 0) + 1;
-        secPicked.push(q);
+
+    // Special rule: Mocks 1, 2, and 3 use non-overlapping 60 questions for English Content
+    if (secKey === "englishSubject" && mockNumber <= 3) {
+      const start = (mockNumber - 1) * 60;
+      secPicked = pool.slice(start, start + 60);
+      secPicked.forEach(q => { q.usedCount = (q.usedCount || 0) + 1; });
+    } else {
+      // Partition by topic buckets
+      const buckets = {};
+      pool.forEach(q => {
+        const top = q.topic || "General";
+        if (!buckets[top]) buckets[top] = [];
+        buckets[top].push(q);
       });
+
+      for (const [topicName, needed] of Object.entries(quotaMap)) {
+        let bucket = buckets[topicName] || [];
+        bucket.sort((a, b) => (a.usedCount || 0) - (b.usedCount || 0) || Math.random() - 0.5);
+        const items = bucket.slice(0, needed);
+        items.forEach(q => {
+          q.usedCount = (q.usedCount || 0) + 1;
+          secPicked.push(q);
+        });
+      }
+
+      // Fill remaining items if quotas fall short
+      if (secPicked.length < totalRequired) {
+        const remainingNeeded = totalRequired - secPicked.length;
+        const unselected = pool.filter(q => !secPicked.includes(q));
+        unselected.sort((a, b) => (a.usedCount || 0) - (b.usedCount || 0) || Math.random() - 0.5);
+        unselected.slice(0, remainingNeeded).forEach(q => {
+          q.usedCount = (q.usedCount || 0) + 1;
+          secPicked.push(q);
+        });
+      }
     }
 
-    // Fill remaining items if topic quotas do not meet section target
-    if (secPicked.length < totalRequired) {
-      const remainingNeeded = totalRequired - secPicked.length;
-      const unselected = pool.filter(q => !secPicked.includes(q));
-      unselected.sort((a, b) => (a.usedCount || 0) - (b.usedCount || 0) || Math.random() - 0.5);
-      unselected.slice(0, remainingNeeded).forEach(q => {
-        q.usedCount = (q.usedCount || 0) + 1;
-        secPicked.push(q);
-      });
-    }
+    // Shuffle only inside this specific section block
+    shuffleArray(secPicked);
 
-    chosen.push(...secPicked);
+    // Append to main list maintaining the exact section sequence
+    finalOrderedExam.push(...secPicked);
   });
 
-  // Fisher-Yates shuffle across the selected items
-  for (let i = chosen.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [chosen[i], chosen[j]] = [chosen[j], chosen[i]];
-  }
-  return chosen;
+  return finalOrderedExam;
 }
 
 function showPortal() {
@@ -106,52 +108,40 @@ function showPortal() {
   document.getElementById("appContainer").innerHTML = `
     <div class="card portal-welcome">
       <h2>APTET Examination Portal</h2>
-      <p style="color: var(--text-muted); margin-bottom: 24px;">
-        Choose full comprehensive mock tests or subject-wise practice tests.
+      <p style="color: var(--text-muted); margin-bottom: 20px;">
+        150 Questions &bull; 150 Marks &bull; 150 Minutes<br>
+        Organized by official examination subject sequence.
       </p>
 
-      <h3 style="text-align: left; color: var(--primary); margin-bottom: 12px; font-size: 1rem; border-bottom: 2px solid var(--border); padding-bottom: 6px;">
-        1. Full 150-Mark Mock Exams (150 Mins)
-      </h3>
-      <div class="mock-buttons-grid" style="margin-bottom: 28px;">
-        <button class="btn-next" onclick="startMock('all', 1)">Full Mock 1</button>
-        <button class="btn-next" onclick="startMock('all', 2)">Full Mock 2</button>
-        <button class="btn-next" onclick="startMock('all', 3)">Full Mock 3</button>
-        <button class="btn-prev" onclick="startMock('all', Math.floor(4 + Math.random() * 50))">Random Full Mock</button>
+      <div class="mock-buttons-grid">
+        <button class="btn-next" onclick="startMock(1)">Start Mock 1</button>
+        <button class="btn-next" onclick="startMock(2)">Start Mock 2</button>
+        <button class="btn-next" onclick="startMock(3)">Start Mock 3</button>
+        <button class="btn-prev" onclick="startMock(Math.floor(4 + Math.random() * 50))">Random Mock</button>
       </div>
 
-      <h3 style="text-align: left; color: var(--secondary); margin-bottom: 12px; font-size: 1rem; border-bottom: 2px solid var(--border); padding-bottom: 6px;">
-        2. Subject-Wise Practice Tests
-      </h3>
-      <div class="mock-buttons-grid">
-        <button class="btn-subject" onclick="startMock('englishSubject', 1)">
-          <strong>English Content</strong><br><small>60 Qs &bull; 60 Mins</small>
-        </button>
-        <button class="btn-subject" onclick="startMock('cdp', 1)">
-          <strong>CDP (Psychology)</strong><br><small>30 Qs &bull; 30 Mins</small>
-        </button>
-        <button class="btn-subject" onclick="startMock('teluguLanguage1', 1)">
-          <strong>Telugu Language-I</strong><br><small>30 Qs &bull; 30 Mins</small>
-        </button>
-        <button class="btn-subject" onclick="startMock('englishLanguage2', 1)">
-          <strong>English Language-II</strong><br><small>30 Qs &bull; 30 Mins</small>
-        </button>
+      <div style="font-size: 0.9rem; color: #334155; background: #f8fafc; padding: 16px; border-radius: 6px; border: 1px solid var(--border); text-align: left; margin-top: 16px;">
+        <strong>Section-Wise Examination Order:</strong>
+        <ol style="margin-left: 20px; margin-top: 8px; line-height: 1.8;">
+          <li><strong>Telugu Language-I:</strong> Questions 1 – 30 (30 Marks)</li>
+          <li><strong>Child Development & Pedagogy (CDP):</strong> Questions 31 – 60 (30 Marks)</li>
+          <li><strong>English Language-II:</strong> Questions 61 – 90 (30 Marks)</li>
+          <li><strong>English Content:</strong> Questions 91 – 150 (60 Marks)</li>
+        </ol>
       </div>
     </div>
   `;
 }
 
-function startMock(mode, num) {
-  const cfg = SUBJECT_CONFIG[mode];
-  activeExam.mode = mode;
+function startMock(num) {
   activeExam.mockNumber = num;
-  activeExam.questions = generateMockQuestions(mode, num);
+  activeExam.questions = generateMockQuestions(num);
   activeExam.userAnswers = {};
-  activeExam.timeLeft = cfg.timeMinutes * 60;
+  activeExam.timeLeft = 150 * 60;
   activeExam.currentIndex = 0;
 
-  document.getElementById("headerTitle").innerText = cfg.title.toUpperCase();
-  document.getElementById("activeMockName").innerText = mode === "all" ? `Mock ${num}` : cfg.title;
+  document.getElementById("headerTitle").innerText = "APTET MOCK TEST - 150 MARKS";
+  document.getElementById("activeMockName").innerText = `Mock ${num}`;
   document.getElementById("examMeta").style.display = "flex";
   document.getElementById("progressBar").style.display = "block";
 
@@ -167,7 +157,7 @@ function startTimer() {
     updateTimerUI();
     if (activeExam.timeLeft <= 0) {
       clearInterval(activeExam.timerInterval);
-      alert("Exam time has expired! Auto-submitting.");
+      alert("Exam time has expired! Submitting responses.");
       finalizeSubmission();
     }
   }, 1000);
@@ -184,14 +174,15 @@ function renderQuestion() {
   const q = activeExam.questions[activeExam.currentIndex];
   const answered = activeExam.userAnswers[activeExam.currentIndex];
   const total = activeExam.questions.length;
+  const qNum = activeExam.currentIndex + 1;
 
-  document.getElementById("progressFill").style.width = `${((activeExam.currentIndex + 1) / total) * 100}%`;
+  document.getElementById("progressFill").style.width = `${(qNum / total) * 100}%`;
 
   document.getElementById("appContainer").innerHTML = `
     <div class="card">
       <div class="q-meta">
         <span class="badge">${getSectionTitle(q.section)} &bull; ${q.topic}</span>
-        <span class="q-title">Question ${activeExam.currentIndex + 1} of ${total}</span>
+        <span class="q-title">Question ${qNum} of ${total}</span>
       </div>
 
       <div class="q-text">${escapeHtml(q.question)}</div>
@@ -262,11 +253,23 @@ function finalizeSubmission() {
   document.getElementById("progressBar").style.display = "none";
 
   let correct = 0, wrong = 0, unanswered = 0;
+  const sectionScores = {
+    teluguLanguage1: { correct: 0, total: 30, title: "Telugu Language-I" },
+    cdp: { correct: 0, total: 30, title: "CDP" },
+    englishLanguage2: { correct: 0, total: 30, title: "English Language-II" },
+    englishSubject: { correct: 0, total: 60, title: "English Content" }
+  };
+
   activeExam.questions.forEach((q, idx) => {
     const ans = activeExam.userAnswers[idx];
-    if (ans === undefined) unanswered++;
-    else if (ans === q.correctOptionIndex) correct++;
-    else wrong++;
+    if (ans === undefined) {
+      unanswered++;
+    } else if (ans === q.correctOptionIndex) {
+      correct++;
+      sectionScores[q.section].correct++;
+    } else {
+      wrong++;
+    }
   });
 
   const total = activeExam.questions.length;
@@ -274,12 +277,29 @@ function finalizeSubmission() {
 
   document.getElementById("appContainer").innerHTML = `
     <div class="card" style="text-align: center; margin-bottom: 24px;">
-      <h2>Exam Results: ${SUBJECT_CONFIG[activeExam.mode].title}</h2>
+      <h2>Mock Test Evaluation</h2>
       <div style="font-size: 2.2rem; font-weight: 800; color: var(--success); margin: 12px 0;">
         ${correct} / ${total}
       </div>
-      <p style="font-weight: 600; color: #166534;">Percentage: ${pct}%</p>
-      <div style="display: flex; justify-content: center; gap: 24px; margin-top: 14px; font-weight: 600;">
+      <p style="font-weight: 600; color: #166534; margin-bottom: 16px;">Percentage: ${pct}%</p>
+      
+      <!-- Section-wise Score Breakdown -->
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; text-align: left;">
+        <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+          <strong>Telugu Language-I (Q1-30):</strong> ${sectionScores.teluguLanguage1.correct} / 30
+        </div>
+        <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+          <strong>CDP (Q31-60):</strong> ${sectionScores.cdp.correct} / 30
+        </div>
+        <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+          <strong>English Language-II (Q61-90):</strong> ${sectionScores.englishLanguage2.correct} / 30
+        </div>
+        <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+          <strong>English Content (Q91-150):</strong> ${sectionScores.englishSubject.correct} / 60
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: center; gap: 24px; font-weight: 600;">
         <span style="color: var(--success);">&check; Correct: ${correct}</span>
         <span style="color: var(--danger);">&cross; Wrong: ${wrong}</span>
         <span style="color: var(--text-muted);">&minus; Unanswered: ${unanswered}</span>
@@ -297,7 +317,9 @@ function finalizeSubmission() {
         const isAns = userChoice !== undefined;
 
         let statusClass = isAns ? (isCorrect ? 'correct' : 'wrong') : 'unanswered';
-        let statusTag = isAns ? (isCorrect ? '<span class="status-tag tag-correct">&check; Correct</span>' : '<span class="status-tag tag-wrong">&cross; Incorrect</span>') : '<span class="status-tag tag-unanswered">&minus; Unanswered</span>';
+        let statusTag = isAns 
+          ? (isCorrect ? '<span class="status-tag tag-correct">&check; Correct</span>' : '<span class="status-tag tag-wrong">&cross; Incorrect</span>') 
+          : '<span class="status-tag tag-unanswered">&minus; Unanswered</span>';
 
         return `
           <div class="card review-box ${statusClass}">
@@ -330,10 +352,10 @@ function finalizeSubmission() {
 
 function getSectionTitle(sec) {
   switch (sec) {
-    case "englishSubject": return "English Content";
-    case "cdp": return "CDP";
     case "teluguLanguage1": return "Telugu Language-I";
+    case "cdp": return "CDP";
     case "englishLanguage2": return "English Language-II";
+    case "englishSubject": return "English Content";
     default: return sec;
   }
 }
