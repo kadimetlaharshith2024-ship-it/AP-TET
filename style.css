@@ -308,3 +308,16 @@ button {
   max-width: 440px;
   width: 90%;
 }
+
+.btn-subject {
+  background: white;
+  border: 1.5px solid var(--secondary);
+  color: var(--secondary);
+  padding: 12px 14px;
+  line-height: 1.3;
+}
+
+.btn-subject:hover {
+  background: #f0fdfa;
+  border-color: #0d9488;
+}

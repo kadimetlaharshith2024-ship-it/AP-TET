@@ -8,11 +8,13 @@ const MASTER_QUESTION_POOL = [
 
 console.log("Total Questions Loaded into Master Pool:", MASTER_QUESTION_POOL.length);
 
-const MOCK_PATTERN = {
-  englishSubject: 60,
-  cdp: 30,
-  teluguLanguage1: 30,
-  englishLanguage2: 30
+// Subject configurations: question count and duration in minutes
+const SUBJECT_CONFIG = {
+  all: { title: "Full Mock Test (All Subjects)", count: 150, timeMinutes: 150 },
+  englishSubject: { title: "English Content", count: 60, timeMinutes: 60 },
+  cdp: { title: "Child Development & Pedagogy (CDP)", count: 30, timeMinutes: 30 },
+  teluguLanguage1: { title: "Telugu Language-I", count: 30, timeMinutes: 30 },
+  englishLanguage2: { title: "English Language-II", count: 30, timeMinutes: 30 }
 };
 
 const TARGET_SUBTOPIC_QUOTAS = {
@@ -23,6 +25,7 @@ const TARGET_SUBTOPIC_QUOTAS = {
 };
 
 let activeExam = {
+  mode: "all",           // "all" or specific subject key
   mockNumber: 1,
   questions: [],
   userAnswers: {},
@@ -31,13 +34,15 @@ let activeExam = {
   currentIndex: 0
 };
 
-function generateMockQuestions(mockNumber) {
+function generateMockQuestions(mode, mockNumber) {
   const chosen = [];
-  const sections = ["englishSubject", "cdp", "teluguLanguage1", "englishLanguage2"];
+  const sectionsToInclude = mode === "all" 
+    ? ["englishSubject", "cdp", "teluguLanguage1", "englishLanguage2"] 
+    : [mode];
 
-  sections.forEach(sec => {
+  sectionsToInclude.forEach(sec => {
     const quotaMap = TARGET_SUBTOPIC_QUOTAS[sec] || {};
-    const totalRequired = MOCK_PATTERN[sec];
+    const totalRequired = SUBJECT_CONFIG[sec].count;
     let pool = MASTER_QUESTION_POOL.filter(q => q.section === sec);
 
     // Rule: Mocks 1 to 3 guarantee zero repetition for English Subject
@@ -84,7 +89,7 @@ function generateMockQuestions(mockNumber) {
     chosen.push(...secPicked);
   });
 
-  // Fisher-Yates shuffle across the 150 items
+  // Fisher-Yates shuffle across the selected items
   for (let i = chosen.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [chosen[i], chosen[j]] = [chosen[j], chosen[i]];
@@ -100,39 +105,53 @@ function showPortal() {
 
   document.getElementById("appContainer").innerHTML = `
     <div class="card portal-welcome">
-      <h2>APTET Mock Test Practice</h2>
-      <p style="color: var(--text-muted); margin-bottom: 20px;">
-        150 Questions &bull; 150 Marks &bull; 150 Minutes<br>
-        Balanced distribution from 2,160 verified question bank items.
+      <h2>APTET Examination Portal</h2>
+      <p style="color: var(--text-muted); margin-bottom: 24px;">
+        Choose full comprehensive mock tests or subject-wise practice tests.
       </p>
-      <div class="mock-buttons-grid">
-        <button class="btn-next" onclick="startMock(1)">Start Mock 1</button>
-        <button class="btn-next" onclick="startMock(2)">Start Mock 2</button>
-        <button class="btn-next" onclick="startMock(3)">Start Mock 3</button>
-        <button class="btn-prev" onclick="startMock(Math.floor(4 + Math.random() * 50))">Generate Random Mock</button>
+
+      <h3 style="text-align: left; color: var(--primary); margin-bottom: 12px; font-size: 1rem; border-bottom: 2px solid var(--border); padding-bottom: 6px;">
+        1. Full 150-Mark Mock Exams (150 Mins)
+      </h3>
+      <div class="mock-buttons-grid" style="margin-bottom: 28px;">
+        <button class="btn-next" onclick="startMock('all', 1)">Full Mock 1</button>
+        <button class="btn-next" onclick="startMock('all', 2)">Full Mock 2</button>
+        <button class="btn-next" onclick="startMock('all', 3)">Full Mock 3</button>
+        <button class="btn-prev" onclick="startMock('all', Math.floor(4 + Math.random() * 50))">Random Full Mock</button>
       </div>
-      <div style="font-size: 0.85rem; color: #64748b; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid var(--border); text-align: left;">
-        <strong>Section-Wise Breakdown:</strong>
-        <ul style="margin-left: 20px; margin-top: 4px;">
-          <li>English Content: 60 Questions (Pool of 180)</li>
-          <li>CDP (Psychology): 30 Questions (Pool of 630)</li>
-          <li>Telugu Language-I: 30 Questions (Pool of 630)</li>
-          <li>English Language-II: 30 Questions (Pool of 720)</li>
-        </ul>
+
+      <h3 style="text-align: left; color: var(--secondary); margin-bottom: 12px; font-size: 1rem; border-bottom: 2px solid var(--border); padding-bottom: 6px;">
+        2. Subject-Wise Practice Tests
+      </h3>
+      <div class="mock-buttons-grid">
+        <button class="btn-subject" onclick="startMock('englishSubject', 1)">
+          <strong>English Content</strong><br><small>60 Qs &bull; 60 Mins</small>
+        </button>
+        <button class="btn-subject" onclick="startMock('cdp', 1)">
+          <strong>CDP (Psychology)</strong><br><small>30 Qs &bull; 30 Mins</small>
+        </button>
+        <button class="btn-subject" onclick="startMock('teluguLanguage1', 1)">
+          <strong>Telugu Language-I</strong><br><small>30 Qs &bull; 30 Mins</small>
+        </button>
+        <button class="btn-subject" onclick="startMock('englishLanguage2', 1)">
+          <strong>English Language-II</strong><br><small>30 Qs &bull; 30 Mins</small>
+        </button>
       </div>
     </div>
   `;
 }
 
-function startMock(num) {
+function startMock(mode, num) {
+  const cfg = SUBJECT_CONFIG[mode];
+  activeExam.mode = mode;
   activeExam.mockNumber = num;
-  activeExam.questions = generateMockQuestions(num);
+  activeExam.questions = generateMockQuestions(mode, num);
   activeExam.userAnswers = {};
-  activeExam.timeLeft = 150 * 60;
+  activeExam.timeLeft = cfg.timeMinutes * 60;
   activeExam.currentIndex = 0;
 
-  document.getElementById("headerTitle").innerText = "APTET MOCK TEST - VERSION 1";
-  document.getElementById("activeMockName").innerText = `Mock ${num}`;
+  document.getElementById("headerTitle").innerText = cfg.title.toUpperCase();
+  document.getElementById("activeMockName").innerText = mode === "all" ? `Mock ${num}` : cfg.title;
   document.getElementById("examMeta").style.display = "flex";
   document.getElementById("progressBar").style.display = "block";
 
@@ -227,7 +246,8 @@ function nextQ() {
 
 function openModal() {
   const count = Object.keys(activeExam.userAnswers).length;
-  document.getElementById("modalPrompt").innerText = `You have answered ${count} out of 150 questions. Are you ready to submit?`;
+  const total = activeExam.questions.length;
+  document.getElementById("modalPrompt").innerText = `You have answered ${count} out of ${total} questions. Are you ready to submit?`;
   document.getElementById("confirmModal").style.display = "grid";
 }
 
@@ -249,13 +269,14 @@ function finalizeSubmission() {
     else wrong++;
   });
 
-  const pct = ((correct / activeExam.questions.length) * 100).toFixed(2);
+  const total = activeExam.questions.length;
+  const pct = ((correct / total) * 100).toFixed(2);
 
   document.getElementById("appContainer").innerHTML = `
     <div class="card" style="text-align: center; margin-bottom: 24px;">
-      <h2>Exam Results</h2>
+      <h2>Exam Results: ${SUBJECT_CONFIG[activeExam.mode].title}</h2>
       <div style="font-size: 2.2rem; font-weight: 800; color: var(--success); margin: 12px 0;">
-        ${correct} / ${activeExam.questions.length}
+        ${correct} / ${total}
       </div>
       <p style="font-weight: 600; color: #166534;">Percentage: ${pct}%</p>
       <div style="display: flex; justify-content: center; gap: 24px; margin-top: 14px; font-weight: 600;">
@@ -309,7 +330,7 @@ function finalizeSubmission() {
 
 function getSectionTitle(sec) {
   switch (sec) {
-    case "englishSubject": return "English Subject";
+    case "englishSubject": return "English Content";
     case "cdp": return "CDP";
     case "teluguLanguage1": return "Telugu Language-I";
     case "englishLanguage2": return "English Language-II";
