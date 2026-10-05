@@ -10,10 +10,10 @@ console.log("Total Questions Loaded into Master Pool:", MASTER_QUESTION_POOL.len
 
 // Official Paper Pattern (Sequential Order: Telugu -> CDP -> English-II -> English Content)
 const SECTION_ORDER = [
-  { key: "teluguLanguage1", title: "Telugu Language-I", count: 30, startNum: 1, endNum: 30 },
-  { key: "cdp", title: "Child Development & Pedagogy (CDP)", count: 30, startNum: 31, endNum: 60 },
-  { key: "englishLanguage2", title: "English Language-II", count: 30, startNum: 61, endNum: 90 },
-  { key: "englishSubject", title: "English Content", count: 60, startNum: 91, endNum: 150 }
+  { key: "teluguLanguage1", title: "Telugu Language-I", count: 30, startIndex: 0, endIndex: 29 },
+  { key: "cdp", title: "CDP (Psychology)", count: 30, startIndex: 30, endIndex: 59 },
+  { key: "englishLanguage2", title: "English Language-II", count: 30, startIndex: 60, endIndex: 89 },
+  { key: "englishSubject", title: "English Content", count: 60, startIndex: 90, endIndex: 149 }
 ];
 
 const TARGET_SUBTOPIC_QUOTAS = {
@@ -44,7 +44,6 @@ function shuffleArray(arr) {
 function generateMockQuestions(mockNumber) {
   const finalOrderedExam = [];
 
-  // Iterate strictly in defined section sequence
   SECTION_ORDER.forEach(secConfig => {
     const secKey = secConfig.key;
     const quotaMap = TARGET_SUBTOPIC_QUOTAS[secKey] || {};
@@ -59,7 +58,6 @@ function generateMockQuestions(mockNumber) {
       secPicked = pool.slice(start, start + 60);
       secPicked.forEach(q => { q.usedCount = (q.usedCount || 0) + 1; });
     } else {
-      // Partition by topic buckets
       const buckets = {};
       pool.forEach(q => {
         const top = q.topic || "General";
@@ -77,7 +75,6 @@ function generateMockQuestions(mockNumber) {
         });
       }
 
-      // Fill remaining items if quotas fall short
       if (secPicked.length < totalRequired) {
         const remainingNeeded = totalRequired - secPicked.length;
         const unselected = pool.filter(q => !secPicked.includes(q));
@@ -91,8 +88,6 @@ function generateMockQuestions(mockNumber) {
 
     // Shuffle only inside this specific section block
     shuffleArray(secPicked);
-
-    // Append to main list maintaining the exact section sequence
     finalOrderedExam.push(...secPicked);
   });
 
@@ -110,7 +105,7 @@ function showPortal() {
       <h2>APTET Examination Portal</h2>
       <p style="color: var(--text-muted); margin-bottom: 20px;">
         150 Questions &bull; 150 Marks &bull; 150 Minutes<br>
-        Organized by official examination subject sequence.
+        Full Section-Switching enabled during the test.
       </p>
 
       <div class="mock-buttons-grid">
@@ -121,13 +116,12 @@ function showPortal() {
       </div>
 
       <div style="font-size: 0.9rem; color: #334155; background: #f8fafc; padding: 16px; border-radius: 6px; border: 1px solid var(--border); text-align: left; margin-top: 16px;">
-        <strong>Section-Wise Examination Order:</strong>
-        <ol style="margin-left: 20px; margin-top: 8px; line-height: 1.8;">
-          <li><strong>Telugu Language-I:</strong> Questions 1 – 30 (30 Marks)</li>
-          <li><strong>Child Development & Pedagogy (CDP):</strong> Questions 31 – 60 (30 Marks)</li>
-          <li><strong>English Language-II:</strong> Questions 61 – 90 (30 Marks)</li>
-          <li><strong>English Content:</strong> Questions 91 – 150 (60 Marks)</li>
-        </ol>
+        <strong>Section Switching Highlights:</strong>
+        <ul style="margin-left: 20px; margin-top: 8px; line-height: 1.8;">
+          <li>Switch between <strong>Telugu</strong>, <strong>CDP</strong>, <strong>English-II</strong>, and <strong>English Content</strong> anytime.</li>
+          <li>Click any question number in the palette to navigate directly.</li>
+          <li>Answered questions will turn green automatically.</li>
+        </ul>
       </div>
     </div>
   `;
@@ -170,15 +164,72 @@ function updateTimerUI() {
   document.getElementById("timerDisplay").innerText = `${h}:${m}:${s}`;
 }
 
+// Identify active section object by question index
+function getCurrentSectionConfig(idx) {
+  return SECTION_ORDER.find(sec => idx >= sec.startIndex && idx <= sec.endIndex) || SECTION_ORDER[0];
+}
+
+// Jump directly to a question
+function jumpToQuestion(idx) {
+  if (idx >= 0 && idx < activeExam.questions.length) {
+    activeExam.currentIndex = idx;
+    renderQuestion();
+  }
+}
+
+// Switch directly to the first question of a subject
+function switchToSection(secKey) {
+  const sec = SECTION_ORDER.find(s => s.key === secKey);
+  if (sec) {
+    jumpToQuestion(sec.startIndex);
+  }
+}
+
 function renderQuestion() {
   const q = activeExam.questions[activeExam.currentIndex];
   const answered = activeExam.userAnswers[activeExam.currentIndex];
   const total = activeExam.questions.length;
   const qNum = activeExam.currentIndex + 1;
+  const currentSec = getCurrentSectionConfig(activeExam.currentIndex);
 
   document.getElementById("progressFill").style.width = `${(qNum / total) * 100}%`;
 
+  // Render: 1) Section Navigation Tabs, 2) Section Question Palette, 3) Question Card
   document.getElementById("appContainer").innerHTML = `
+    <!-- Top Section Switching Bar -->
+    <div class="section-tabs-bar">
+      ${SECTION_ORDER.map(sec => `
+        <button 
+          class="sec-tab-btn ${currentSec.key === sec.key ? 'active-sec' : ''}" 
+          onclick="switchToSection('${sec.key}')">
+          ${sec.title} (${sec.startIndex + 1}–${sec.endIndex + 1})
+        </button>
+      `).join('')}
+    </div>
+
+    <!-- Active Section Question Palette -->
+    <div class="palette-container">
+      <div class="palette-header">
+        <span>${currentSec.title} Questions:</span>
+        <span>Green = Answered | Grey = Not Answered</span>
+      </div>
+      <div class="palette-grid">
+        ${Array.from({ length: currentSec.count }, (_, i) => {
+          const globalIdx = currentSec.startIndex + i;
+          const isAns = activeExam.userAnswers[globalIdx] !== undefined;
+          const isCurr = globalIdx === activeExam.currentIndex;
+          return `
+            <button 
+              class="palette-num-btn ${isAns ? 'p-answered' : ''} ${isCurr ? 'p-current' : ''}" 
+              onclick="jumpToQuestion(${globalIdx})">
+              ${globalIdx + 1}
+            </button>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Question Card -->
     <div class="card">
       <div class="q-meta">
         <span class="badge">${getSectionTitle(q.section)} &bull; ${q.topic}</span>
